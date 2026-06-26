@@ -1,0 +1,10 @@
+numpy>=1.23
+opencv-python>=4.8
+Pillow>=9.0
+scipy>=1.9
+transformers>=5.12.1
+accelerate>=1.14.0
+safetensors>=0.7.0
+# Optional, for deep model backend:
+# torch>=1.13
+# torchvision>=0.14
