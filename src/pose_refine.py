@@ -77,14 +77,21 @@ def eval_pose(pose, sat_feat, phone_shape, sat_shape, uv_samples, retrieval_scor
     gps_dist = math.hypot(pose.x - C.GPS_XY_INIT[0], pose.y - C.GPS_XY_INIT[1])
     gps_prior = math.exp(-0.5 * (gps_dist / max(C.SEARCH_XY_RADIUS_PX * 0.6, 1)) ** 2)
     yaw_prior = math.exp(-0.5 * (angle_diff_deg(pose.yaw, yaw_search_center()) / max(C.SEARCH_YAW_RADIUS_DEG * 0.7, 1)) ** 2)
+    pitch_prior = math.exp(-0.5 * ((pose.pitch - C.PITCH_INIT_DEG) / 2.0) ** 2)
+    hfov_prior = math.exp(-0.5 * ((pose.hfov - C.HFOV_INIT_DEG) / 8.0) ** 2)
+    mpp_prior = math.exp(-0.5 * ((pose.mpp - C.METERS_PER_PIXEL_INIT) / 0.16) ** 2)
+    camera_prior = (pitch_prior + hfov_prior + mpp_prior) / 3.0
     shp = shape_penalty(poly, sat_shape)
     out_penalty = 1.0 - float(np.mean(valid_g.astype(np.float32)))
 
     score = (C.W_DEEP_RETRIEVAL * retrieval_score + C.W_ROAD_OVERLAP * road + C.W_CENTERLINE_ROAD * center_road +
-             C.W_BOUNDARY_EDGE * boundary_edge + C.W_GPS_PRIOR * gps_prior + C.W_YAW_PRIOR * yaw_prior -
+             C.W_BOUNDARY_EDGE * boundary_edge + C.W_GPS_PRIOR * gps_prior + C.W_YAW_PRIOR * yaw_prior +
+             getattr(C, "W_CAMERA_PRIOR", 0.0) * camera_prior -
              C.W_BAD_REGION * bad - C.W_SHAPE * shp - 0.35 * out_penalty)
     parts = {"road": road, "center_road": center_road, "boundary_edge": boundary_edge, "bad": bad,
-             "gps_dist": gps_dist, "gps_prior": gps_prior, "yaw_prior": yaw_prior, "shape": shp, "out": out_penalty}
+             "gps_dist": gps_dist, "gps_prior": gps_prior, "yaw_prior": yaw_prior,
+             "pitch_prior": pitch_prior, "hfov_prior": hfov_prior, "mpp_prior": mpp_prior,
+             "camera_prior": camera_prior, "shape": shp, "out": out_penalty}
     return float(score), parts
 
 
@@ -181,7 +188,9 @@ def draw_best_overlay(sat_img, phone_img, results):
 
 def save_results_csv(path, results):
     with open(path, "w", newline="", encoding="utf-8-sig") as f:
-        fields = ["rank","score","retrieval","x","y","yaw","pitch","hfov","mpp","road","center_road","boundary_edge","bad","gps_dist","gps_prior","yaw_prior","shape","out"]
+        fields = ["rank","score","retrieval","x","y","yaw","pitch","hfov","mpp","road","center_road",
+                  "boundary_edge","bad","gps_dist","gps_prior","yaw_prior","pitch_prior","hfov_prior",
+                  "mpp_prior","camera_prior","shape","out"]
         writer = csv.DictWriter(f, fieldnames=fields); writer.writeheader()
         for i, r in enumerate(results, start=1):
             row = {"rank": i, "score": r.score, "retrieval": r.retrieval_score,
